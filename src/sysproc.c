@@ -111,13 +111,14 @@ int sys_mencrypt(void) {
 int sys_getpgtable(void) {
   struct pt_entry * entries; 
   int num;
+  int wsetOnly;
 
   if(argint(1, &num) < 0)
     return -1;
   if(argptr(0, (char**)&entries, num*sizeof(struct pt_entry)) < 0){
     return -1;
   }
-  return getpgtable(entries, num);
+  return getpgtable(entries, num, wsetOnly);
 }
 
 

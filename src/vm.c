@@ -506,7 +506,7 @@ int mencrypt(char *virtual_addr, int len) {
   return 0;
 }
 
-int getpgtable(struct pt_entry* pt_entries, int num) {
+int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
 
   struct proc *curproc = myproc();
