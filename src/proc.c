@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "ptentry.h"
 
 struct {
   struct spinlock lock;
@@ -112,6 +113,10 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  p->clck_hand = -1;
+  for (int i = 0; i < CLOCKSIZE; i++) {
+    p->clck_queue[i].vpn = -1;
+  }
   return p;
 }
 
@@ -162,19 +167,21 @@ growproc(int n)
   struct proc *curproc = myproc();
 
   sz = curproc->sz;
-  int len_page = sz / PGSIZE;
-  
+  uint old_sz = curproc->sz;  
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
-    // envrypt len_page pages    
-    for(int i = 0; i < len_page; i++){
-      mencrypt((void*)curproc->sz, len_page);
-    }
-
+    // envrypt new pages    
+    mencrypt((char*)old_sz, n / PGSIZE);
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
+    // delete all pages
+    uint pg = PGROUNDDOWN(old_sz - 1);
+    while (pg < sz) {
+      clck_remove(pg);
+      pg -= PGSIZE;
+    }
   }
   curproc->sz = sz;
   switchuvm(curproc);
@@ -209,6 +216,14 @@ fork(void)
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
+  pte_t *pte;
+
+  for (i = 0; i < CLOCKSIZE; i++){
+    pte = walkpgdir(np->pgdir, (char*)curproc->clck_queue[i].vpn, 0);
+    np->clck_queue[i].pte = pte;
+    np->clck_queue[i].vpn = curproc->clck_queue[i].vpn;
+  }
+  np->clck_hand = curproc->clck_hand;
 
   for(i = 0; i < NOFILE; i++)
     if(curproc->ofile[i])

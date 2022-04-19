@@ -193,6 +193,8 @@ int             mencrypt(char *virtual_addr, int len);
 int             getpgtable(struct pt_entry* entries, int num, int wsetOnly);
 int             dump_rawphymem(char *physical_addr, char * buffer);
 int             mdecrypt(char *virtual_addr);
+void            clck_remove(uint);
+pte_t*          walkpgdir(pte_t *, const void*, int);
 
 
 // number of elements in fixed-size array

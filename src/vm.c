@@ -6,9 +6,80 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+#include "ptentry.h"
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
+
+void 
+clck_insert(uint vpn, pte_t *pte)
+{
+  struct proc *curproc = myproc();
+  
+  for (;;){
+    // advance the hand
+    curproc->clck_hand = (curproc->clck_hand + 1) % CLOCKSIZE;
+
+    // check if there is an empty slot
+    if (curproc->clck_queue[curproc->clck_hand].vpn == -1){
+      // empty slot found
+      curproc->clck_queue[curproc->clck_hand].vpn = vpn;
+      curproc->clck_queue[curproc->clck_hand].pte = pte;
+      break;
+    }
+
+    // check if page in slot does not have reference bit set 
+    else if (!(*(curproc->clck_queue[curproc->clck_hand].pte) & PTE_A)){
+      // encrypt and put in new page
+      mencrypt((char*)curproc->clck_queue[curproc->clck_hand].vpn, 1);
+      curproc->clck_queue[curproc->clck_hand].vpn = vpn;
+      curproc->clck_queue[curproc->clck_hand].pte = pte;
+      break;
+    }
+
+    // else, clear the reference bit
+    else{
+      *(curproc->clck_queue[curproc->clck_hand].pte) &= ~PTE_A;
+    }
+  }
+  // decrypte page
+  mdecrypt((char*)vpn);
+}
+
+void
+clck_remove(uint vpn)
+{
+  struct proc *curproc = myproc();
+  int prev_hand = curproc->clck_hand;
+  int match_idx = -1;
+
+  // find matching elements
+  for (int i = 0; i < CLOCKSIZE; ++i){
+    int idx = (curproc->clck_hand + i) % CLOCKSIZE;
+    if (curproc->clck_queue[idx].vpn == vpn){
+      match_idx = idx;
+      break;
+    }
+  }
+
+  if (match_idx == -1){
+    return;
+  }else{
+    // encrypt page
+    mencrypt((char*)curproc->clck_queue[match_idx].vpn, 1);
+  }
+
+  // shift elements
+  for (int idx = match_idx; idx != prev_hand; idx = (idx+1) % CLOCKSIZE){
+    int next_idx = (idx+1) % CLOCKSIZE;
+    curproc->clck_queue[idx].vpn = curproc->clck_queue[next_idx].vpn;
+    curproc->clck_queue[idx].pte = curproc->clck_queue[next_idx].pte;
+  }
+
+  // clear last element
+  curproc->clck_queue[prev_hand].vpn = -1;
+  curproc->clck_hand = curproc->clck_hand == 0 ? CLOCKSIZE-1 : curproc->clck_hand-1;
+}
 
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
@@ -32,7 +103,7 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
-static pte_t *
+pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
   pde_t *pde;
@@ -509,10 +580,16 @@ int mencrypt(char *virtual_addr, int len) {
 int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
 
-  // If wsetOnly is neither 0 or 1, return -1
+  // check if pt_entries is empty
+  if (pt_entries == 0) {
+    return -1;
+  }
+
+  // check if wsetOnly is 0 or 1
   if (wsetOnly != 0 && wsetOnly != 1) {
     return -1;
   }
+
 
   struct proc *curproc = myproc();
   pde_t *pgdir = curproc->pgdir;
@@ -522,56 +599,41 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   else 
     uva = PGROUNDDOWN(curproc->sz);
 
-  // If wsetOnly is 1, filter the results and only output the page table entries for the pages in your working set
-  if (wsetOnly == 1){
-    int i = 0;
-    for (;;uva -=PGSIZE)
-    {    
-      
-      pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
-
-      if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
-        continue;
-
-      if (*pte & PTE_W) {
-        pt_entries[i].pdx = PDX(uva);
+  int i = 0;
+  int count = 0;
+  while (i < num && count < curproc->sz / PGSIZE)
+  {    
+    pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
+    
+    if (wsetOnly == 0){
+      if ((*pte & PTE_E) != 0 || (*pte & PTE_P) != 0) {
+				pt_entries[i].pdx = PDX(uva);
         pt_entries[i].ptx = PTX(uva);
         pt_entries[i].ppage = *pte >> PTXSHIFT;
-        pt_entries[i].present = *pte & PTE_P;
-        pt_entries[i].writable = (*pte & PTE_W) > 0;
-        pt_entries[i].encrypted = (*pte & PTE_E) > 0;
-        pt_entries[i].ref = (*pte & PTE_A) > 0;
-        //PT_A flag needs to be modified as per clock algo.
-        i ++;
-      }
-
-      if (uva == 0 || i == num) break;
+        pt_entries[i].present = (*pte & PTE_P) ? 1 : 0;
+        pt_entries[i].writable = (*pte & PTE_W) ? 1 : 0;
+        pt_entries[i].user = (*pte & PTE_U) ? 1 : 0;
+        pt_entries[i].encrypted = (*pte & PTE_E) ? 1 : 0;
+        pt_entries[i].ref = (*pte & PTE_A) ? 1 : 0;
+        i++;
+			}
+    } else{
+      if (((*pte & PTE_E) == 0) && ((*pte & PTE_P) != 0)) {
+				pt_entries[i].pdx = PDX(uva);
+        pt_entries[i].ptx = PTX(uva);
+        pt_entries[i].ppage = *pte >> PTXSHIFT;
+        pt_entries[i].present = (*pte & PTE_P) ? 1 : 0;
+        pt_entries[i].writable = (*pte & PTE_W) ? 1 : 0;
+        pt_entries[i].user = (*pte & PTE_U) ? 1 : 0;
+        pt_entries[i].encrypted = (*pte & PTE_E) ? 1 : 0;
+        pt_entries[i].ref = (*pte & PTE_A) ? 1 : 0;
+        i++;
+      }    
     }
-    return i;
+    count++;
+    uva -= PGSIZE;
   }
-  else{
-    int i = 0;
-    for (;;uva -=PGSIZE)
-    {    
-      
-      pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
-
-      if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
-        continue;
-
-      pt_entries[i].pdx = PDX(uva);
-      pt_entries[i].ptx = PTX(uva);
-      pt_entries[i].ppage = *pte >> PTXSHIFT;
-      pt_entries[i].present = *pte & PTE_P;
-      pt_entries[i].writable = (*pte & PTE_W) > 0;
-      pt_entries[i].encrypted = (*pte & PTE_E) > 0;
-      pt_entries[i].ref = (*pte & PTE_A) > 0;
-      //PT_A flag needs to be modified as per clock algo.
-      i ++;
-      if (uva == 0 || i == num) break;
-    }
-    return i;
-  }
+  return i;
 }
 
 

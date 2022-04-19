@@ -1,6 +1,7 @@
 #include "ptentry.h"
 struct stat;
 struct rtcdate;
+struct pt_entry;
 
 // system calls
 int fork(void);
