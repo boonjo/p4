@@ -178,7 +178,7 @@ growproc(int n)
       return -1;
     // delete all pages
     uint pg = PGROUNDDOWN(old_sz - 1);
-    while (pg < sz) {
+    while (pg >= sz) {
       clck_remove(pg);
       pg -= PGSIZE;
     }
