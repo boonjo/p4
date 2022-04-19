@@ -509,6 +509,11 @@ int mencrypt(char *virtual_addr, int len) {
 int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
 
+  // If wsetOnly is neither 0 or 1, return -1
+  if (wsetOnly != 0 && wsetOnly != 1) {
+    return -1;
+  }
+
   struct proc *curproc = myproc();
   pde_t *pgdir = curproc->pgdir;
   uint uva = 0;
@@ -517,26 +522,53 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   else 
     uva = PGROUNDDOWN(curproc->sz);
 
-  int i = 0;
-  for (;;uva -=PGSIZE)
-  {
-    
-    pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
+  // If wsetOnly is 1, filter the results and only output the page table entries for the pages in your working set
+  if (wsetOnly == 1){
+    int i = 0;
+    for (;;uva -=PGSIZE)
+    {    
+      
+      pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
 
-    if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
-      continue;
+      if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
+        continue;
 
-    pt_entries[i].pdx = PDX(uva);
-    pt_entries[i].ptx = PTX(uva);
-    pt_entries[i].ppage = *pte >> PTXSHIFT;
-    pt_entries[i].present = *pte & PTE_P;
-    pt_entries[i].writable = (*pte & PTE_W) > 0;
-    pt_entries[i].encrypted = (*pte & PTE_E) > 0;
-    pt_entries[i].ref = (*pte & PTE_A) > 0;
-    //PT_A flag needs to be modified as per clock algo.
-    i ++;
-    if (uva == 0 || i == num) break;
+      if (*pte & PTE_W) {
+        pt_entries[i].pdx = PDX(uva);
+        pt_entries[i].ptx = PTX(uva);
+        pt_entries[i].ppage = *pte >> PTXSHIFT;
+        pt_entries[i].present = *pte & PTE_P;
+        pt_entries[i].writable = (*pte & PTE_W) > 0;
+        pt_entries[i].encrypted = (*pte & PTE_E) > 0;
+        pt_entries[i].ref = (*pte & PTE_A) > 0;
+        //PT_A flag needs to be modified as per clock algo.
+        i ++;
+      }
+      
+      if (uva == 0 || i == num) break;
+    }
+  }
+  else{
+    int i = 0;
+    for (;;uva -=PGSIZE)
+    {    
+      
+      pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
 
+      if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
+        continue;
+
+      pt_entries[i].pdx = PDX(uva);
+      pt_entries[i].ptx = PTX(uva);
+      pt_entries[i].ppage = *pte >> PTXSHIFT;
+      pt_entries[i].present = *pte & PTE_P;
+      pt_entries[i].writable = (*pte & PTE_W) > 0;
+      pt_entries[i].encrypted = (*pte & PTE_E) > 0;
+      pt_entries[i].ref = (*pte & PTE_A) > 0;
+      //PT_A flag needs to be modified as per clock algo.
+      i ++;
+      if (uva == 0 || i == num) break;
+    }
   }
 
   return i;
