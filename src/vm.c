@@ -522,6 +522,7 @@ int mdecrypt(char *virtual_addr) {
     *slider = *slider ^ 0xFF;
     slider++;
   }
+  clck_insert((uint) virtual_addr, pte);
   return 0;
 }
 
