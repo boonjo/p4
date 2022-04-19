@@ -133,5 +133,5 @@ int sys_dump_rawphymem(void) {
     return -1;
   if(argint(0, (int*)&physical_addr) < 0)
     return -1;
-  return dump_rawphymem(physical_addr, buffer);
+  return dump_rawphymem((char*)physical_addr, buffer);
 }
