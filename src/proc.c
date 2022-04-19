@@ -162,9 +162,16 @@ growproc(int n)
   struct proc *curproc = myproc();
 
   sz = curproc->sz;
+  int len_page = sz / PGSIZE;
+  
   if(n > 0){
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
+    // envrypt len_page pages    
+    for(int i = 0; i < len_page; i++){
+      mencrypt((void*)curproc->sz, len_page);
+    }
+
   } else if(n < 0){
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
