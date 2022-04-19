@@ -544,9 +544,10 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
         //PT_A flag needs to be modified as per clock algo.
         i ++;
       }
-      
+
       if (uva == 0 || i == num) break;
     }
+    return i;
   }
   else{
     int i = 0;
@@ -569,10 +570,8 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
       i ++;
       if (uva == 0 || i == num) break;
     }
+    return i;
   }
-
-  return i;
-
 }
 
 
