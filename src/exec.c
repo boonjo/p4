@@ -101,6 +101,11 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
+  mencrypt(0, sz / PGSIZE);
+  curproc->clck_hand = -1;
+  for (int i = 0; i < CLOCKSIZE; i++){
+    curproc->clck_queue[i].vpn = -1;
+  }
   return 0;
 
  bad:
