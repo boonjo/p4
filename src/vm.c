@@ -545,6 +545,7 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
 
 
 int dump_rawphymem(char *physical_addr, char * buffer) {
+  *buffer = *buffer;
   cprintf("p4Debug: dump_rawphymem: %p, %p\n", physical_addr, buffer);
   int retval = copyout(myproc()->pgdir, (uint) buffer, (void *) PGROUNDDOWN((int)P2V(physical_addr)), PGSIZE);
   if (retval)
