@@ -52,7 +52,7 @@ main(int argc, char **argv)
         err("mencrypt doesn't return -1 value when 0xFFFFFFFF is given as virtual page\n");
     
 
-    if (getpgtable(pt_entries, PAGES_NUM) >= 0){
+    if (getpgtable(pt_entries, PAGES_NUM, 0) >= 0){
         for (int i = 0; i < PAGES_NUM; i++) {
             printf(1, "XV6_TEST_OUTPUT Index %d: pdx: 0x%x, ptx: 0x%x, ppage: 0x%x, present: %d, writable: %d, encrypted: %d\n", 
                 i,
