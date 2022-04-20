@@ -578,66 +578,55 @@ int mencrypt(char *virtual_addr, int len) {
   return 0;
 }
 
-int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
-  cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
 
-  // check if pt_entries is empty
-  if (pt_entries == 0) {
-    return -1;
-  }
-
-  // check if wsetOnly is 0 or 1
-  if (wsetOnly != 0 && wsetOnly != 1) {
-    return -1;
-  }
-
-
-  struct proc *curproc = myproc();
-  pde_t *pgdir = curproc->pgdir;
-  uint uva = 0;
-  if (curproc->sz % PGSIZE == 0)
-    uva = curproc->sz - PGSIZE;
-  else 
-    uva = PGROUNDDOWN(curproc->sz);
-
-  int i = 0;
-  int count = 0;
-  while (i < num && count < curproc->sz / PGSIZE)
-  {    
-    pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
-    
-    if (wsetOnly == 0){
-      if ((*pte & PTE_E) != 0 || (*pte & PTE_P) != 0) {
-				pt_entries[i].pdx = PDX(uva);
-        pt_entries[i].ptx = PTX(uva);
-        pt_entries[i].ppage = *pte >> PTXSHIFT;
-        pt_entries[i].present = (*pte & PTE_P) ? 1 : 0;
-        pt_entries[i].writable = (*pte & PTE_W) ? 1 : 0;
-        pt_entries[i].user = (*pte & PTE_U) ? 1 : 0;
-        pt_entries[i].encrypted = (*pte & PTE_E) ? 1 : 0;
-        pt_entries[i].ref = (*pte & PTE_A) ? 1 : 0;
-        i++;
-			}
-    } else{
-      if (((*pte & PTE_E) == 0) && ((*pte & PTE_P) != 0)) {
-				pt_entries[i].pdx = PDX(uva);
-        pt_entries[i].ptx = PTX(uva);
-        pt_entries[i].ppage = *pte >> PTXSHIFT;
-        pt_entries[i].present = (*pte & PTE_P) ? 1 : 0;
-        pt_entries[i].writable = (*pte & PTE_W) ? 1 : 0;
-        pt_entries[i].user = (*pte & PTE_U) ? 1 : 0;
-        pt_entries[i].encrypted = (*pte & PTE_E) ? 1 : 0;
-        pt_entries[i].ref = (*pte & PTE_A) ? 1 : 0;
-        i++;
-      }    
-    }
-    count++;
-    uva -= PGSIZE;
-  }
-  return i;
+//return 1 if in queue, 0 if not
+int in_queue (struct proc *curproc, pte_t *pte){
+ for (int i = 0; i < CLOCKSIZE; i++)
+     if(curproc->clck_queue[i].pte == pte)
+       return 1;
+ return 0;
 }
 
-
+int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
+ cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
+ 
+ struct proc *curproc = myproc();
+ pde_t *pgdir = curproc->pgdir;
+ uint uva = 0;
+ if (curproc->sz % PGSIZE == 0)
+   uva = curproc->sz - PGSIZE;
+ else
+   uva = PGROUNDDOWN(curproc->sz);
+ 
+ int i = 0;
+ for (;;uva -=PGSIZE)
+ {
+   pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
+ 
+   //my change
+   if (wsetOnly && !in_queue(curproc, pte))
+     continue;
+  
+   if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
+     continue;
+ 
+   pt_entries[i].pdx = PDX(uva);
+   pt_entries[i].ptx = PTX(uva);
+   pt_entries[i].ppage = *pte >> PTXSHIFT;
+   pt_entries[i].present = *pte & PTE_P;
+   pt_entries[i].writable = (*pte & PTE_W) > 0;
+   pt_entries[i].encrypted = (*pte & PTE_E) > 0;
+   pt_entries[i].ref = (*pte & PTE_A) > 0;
+   //PT_A flag needs to be modified as per clock algo.
+   i ++;
+   if (uva == 0 || i == num) break;
+ 
+ }
+ 
+ return i;
+ 
+}
+ 
 int dump_rawphymem(char *physical_addr, char * buffer) {
   *buffer = *buffer;
   cprintf("p4Debug: dump_rawphymem: %p, %p\n", physical_addr, buffer);
@@ -654,4 +643,3 @@ int dump_rawphymem(char *physical_addr, char * buffer) {
 // Blank page.
 //PAGEBREAK!
 // Blank page.
-
