@@ -105,7 +105,7 @@ struct segdesc {
 //p4Debug: Added PTE_E flag for encrypted pages.
 //You have 12 bits for flags according
 //to page 30 of the textbook
-#define PTE_E           0x100
+#define PTE_E           0x400
 
 // Address in page table or page directory entry
 #define PTE_ADDR(pte)   ((uint)(pte) & ~0xFFF)
