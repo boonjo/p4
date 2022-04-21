@@ -432,7 +432,7 @@ uva2ka(pde_t *pgdir, char *uva)
 
   pte = walkpgdir(pgdir, uva, 0);
   // p4Debug: Check for page's present and encrypted flags.
-  if(((*pte & PTE_P) | (*pte & PTE_E)) == 0)
+  if((*pte & (PTE_P | PTE_E)) == 0)
     return 0;
   if((*pte & PTE_U) == 0)
     return 0;
@@ -588,42 +588,52 @@ int in_queue (struct proc *curproc, pte_t *pte){
 }
 
 int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
- cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
- 
- struct proc *curproc = myproc();
- pde_t *pgdir = curproc->pgdir;
- uint uva = 0;
- if (curproc->sz % PGSIZE == 0)
-   uva = curproc->sz - PGSIZE;
- else
-   uva = PGROUNDDOWN(curproc->sz);
- 
- int i = 0;
- for (;;uva -=PGSIZE)
- {
-   pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
- 
-   //my change
-   if (wsetOnly && !in_queue(curproc, pte))
-     continue;
+ if (pt_entries == 0){
+    return -1;
+  }
   
-   if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
-     continue;
- 
-   pt_entries[i].pdx = PDX(uva);
-   pt_entries[i].ptx = PTX(uva);
-   pt_entries[i].ppage = *pte >> PTXSHIFT;
-   pt_entries[i].present = *pte & PTE_P;
-   pt_entries[i].writable = (*pte & PTE_W) > 0;
-   pt_entries[i].encrypted = (*pte & PTE_E) > 0;
-   pt_entries[i].ref = (*pte & PTE_A) > 0;
-   //PT_A flag needs to be modified as per clock algo.
-   i ++;
-   if (uva == 0 || i == num) break;
- 
- }
- 
- return i;
+  if(wsetOnly != 0 && wsetOnly != 1){
+    return -1;
+  }
+
+  pte_t *pte;
+  struct proc *curproc = myproc();
+  char *curraddr = (char*)PGROUNDDOWN((uint)(curproc->sz));
+  int total_pg = curproc->sz / PGSIZE;
+  int pges = 0;
+	int filled = 0;
+  
+	while (filled < num && pges < total_pg) {
+    pte = walkpgdir(curproc->pgdir, curraddr, 0);
+		if (wsetOnly == 0) {
+			if ((*pte & PTE_E) != 0 || (*pte & PTE_P) != 0) {
+				pt_entries[filled].pdx = PDX(curraddr);
+        pt_entries[filled].ptx = PTX(curraddr);
+        pt_entries[filled].ppage = *pte >> PTXSHIFT;
+        pt_entries[filled].present = (*pte & PTE_P) ? 1 : 0;
+        pt_entries[filled].writable = (*pte & PTE_W) ? 1 : 0;
+        pt_entries[filled].user = (*pte & PTE_U) ? 1 : 0;
+        pt_entries[filled].encrypted = (*pte & PTE_E) ? 1 : 0;
+        pt_entries[filled].ref = (*pte & PTE_A) ? 1 : 0;
+        filled++;
+			}
+		} else {
+			if (((*pte & PTE_E) == 0) && ((*pte & PTE_P) != 0)) {
+				pt_entries[filled].pdx = PDX(curraddr);
+        pt_entries[filled].ptx = PTX(curraddr);
+        pt_entries[filled].ppage = *pte >> PTXSHIFT;
+        pt_entries[filled].present = (*pte & PTE_P) ? 1 : 0;
+        pt_entries[filled].writable = (*pte & PTE_W) ? 1 : 0;
+        pt_entries[filled].user = (*pte & PTE_U) ? 1 : 0;
+        pt_entries[filled].encrypted = (*pte & PTE_E) ? 1 : 0;
+        pt_entries[filled].ref = (*pte & PTE_A) ? 1 : 0;
+        filled++;
+			}
+		}
+    pges++;
+    curraddr -= PGSIZE;
+  }
+	return filled;
  
 }
  
