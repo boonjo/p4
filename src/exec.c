@@ -101,7 +101,15 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
-  mencrypt(0, sz / PGSIZE);
+
+  //my change
+  //mencrypt(0, sz / PGSIZE );
+  //should not encrypt the guard section, so do it separately.
+  mencrypt(0, sz / PGSIZE - 2);
+  mencrypt(sz - PGSIZE, 1);
+
+
+
   curproc->clck_hand = -1;
   for (int i = 0; i < CLOCKSIZE; i++){
     curproc->clck_queue[i].vpn = -1;
