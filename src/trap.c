@@ -45,7 +45,7 @@ trap(struct trapframe *tf)
       exit();
     return;
   }
-  char *addr;
+  char *addr; 
   switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
@@ -83,7 +83,7 @@ trap(struct trapframe *tf)
     addr = (char*)rcr2();
     if (mdecrypt(addr))
     {
-        panic("p4Debug: Memory fault");
+        //panic("p4Debug: Memory fault");
         exit();
     };
     break;
