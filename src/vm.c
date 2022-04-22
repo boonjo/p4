@@ -42,8 +42,6 @@ clck_insert(uint vpn, pte_t *pte)
       *(curproc->clck_queue[curproc->clck_hand].pte) &= ~PTE_A;
     }
   }
-  // decrypte page
-  //mdecrypt((char*)vpn);
 }
 
 void
@@ -148,7 +146,6 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
       *pte = pa | perm | PTE_E;
     else
       *pte = pa | perm | PTE_P;
-
 
     if(a == last)
       break;
@@ -488,6 +485,7 @@ char* translate_and_set(pde_t *pgdir, char *uva) {
   cprintf("p4Debug: PTE was %x and its pointer %p\n", *pte, pte);
   *pte = *pte | PTE_E;
   *pte = *pte & ~PTE_P;
+  *pte = *pte & ~PTE_A;  //most improtant added change! one line changes everything
   cprintf("p4Debug: PTE is now %x\n", *pte);
   return (char*)P2V(PTE_ADDR(*pte));
 }
@@ -525,6 +523,8 @@ int mdecrypt(char *virtual_addr) {
   clck_insert((uint) virtual_addr, pte);
   return 0;
 }
+
+
 
 int mencrypt(char *virtual_addr, int len) {
   cprintf("p4Debug: mencrypt: %p %d\n", virtual_addr, len);
@@ -578,7 +578,6 @@ int mencrypt(char *virtual_addr, int len) {
   return 0;
 }
 
-
 //return 1 if in queue, 0 if not
 int in_queue (struct proc *curproc, pte_t *pte){
  for (int i = 0; i < CLOCKSIZE; i++)
@@ -628,17 +627,17 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
    pt_entries[i].ref = (*pte & PTE_A) > 0;
    //PT_A flag needs to be modified as per clock algo.
    i ++;
-  //  if (uva == 0 || i == num) {
+  //move the below to inside the for loop; otherwise stuck in infinite loop
+  //  if (uva == 0 || i == num) { 
   //    cprintf("breaked out from getpgtable"); //debug purpose only
   //    break;
   //  }
- 
  }
  cprintf("count: %d\n", count); //debug purpose only
  cprintf("not_in_queue_count: %d\n", not_in_queue_count); //debug purpose only
  return i;
- 
 }
+
  
 int dump_rawphymem(char *physical_addr, char * buffer) {
   *buffer = *buffer;
