@@ -580,118 +580,55 @@ int mencrypt(char *virtual_addr, int len) {
 
 //return 1 if in queue, 0 if not
 int in_queue (struct proc *curproc, pte_t *pte){
-for (int i = 0; i < CLOCKSIZE; i++)
-    if(*(curproc->clck_queue[i].pte) == *pte) //in queue
+  for (int i = 0; i < CLOCKSIZE; i++){
+    if (*(curproc->clck_queue[i].pte) == *pte){ //in queue
       return 1;
-cprintf("p4Debug: not in_queue\n");
-return 0;
+    }
+  }
+  cprintf("p4Debug: not in_queue\n");
+  return 0;
 }
  
-// int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
-//   cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
-//   struct proc *curproc = myproc();
-//   pde_t *pgdir = curproc->pgdir;
-//   uint uva = 0;
-//   if (curproc->sz % PGSIZE == 0)
-//     uva = curproc->sz - PGSIZE;
-//   else
-//     uva = PGROUNDDOWN(curproc->sz);
-//   int i = 0;
-//   int count = 0; //debug purpose only
-//   int not_in_queue_count = 0; //debug purpose only
-//   for (; uva != 0 && i != num;uva -=PGSIZE)
-//   {
-//     pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
-//     count++; //debug purpose only
-  
-//   //my change
-//     if (wsetOnly && !in_queue(curproc, pte)){
-//       not_in_queue_count++; //debug
-//       continue;
-//     }
-//  cprintf("in queue\n"); //debug purpose only
-//  cprintf("*pte: %d\n", *pte); //debug purpose only
  
-//    if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
-//     continue;
-//   pt_entries[i].pdx = PDX(uva);
-//   pt_entries[i].ptx = PTX(uva);
-//   pt_entries[i].ppage = *pte >> PTXSHIFT;
-//   pt_entries[i].present = *pte & PTE_P;
-//   pt_entries[i].writable = (*pte & PTE_W) > 0;
-//   pt_entries[i].encrypted = (*pte & PTE_E) > 0;
-//   pt_entries[i].ref = (*pte & PTE_A) > 0;
-//   //PT_A flag needs to be modified as per clock algo.
-//   i ++;
-//  //  if (uva == 0 || i == num) {
-//  //    cprintf("breaked out from getpgtable"); //debug purpose only
-//  //    break;
-//  //  }
-// }
-// cprintf("count: %d\n", count); //debug purpose only
-// cprintf("not_in_queue_count: %d\n", not_in_queue_count); //debug purpose only
-// return i;
-// }
+ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
+    struct proc *curproc = myproc();
+    pde_t *pgdir = curproc->pgdir;
+    uint uva = 0;
 
+    if (curproc->sz % PGSIZE == 0)
+      uva = curproc->sz - PGSIZE;
+    else
+      uva = PGROUNDDOWN(curproc->sz);
 
+    int i = 0;
+    int filled = 0;
+    for (; uva != 0 && i < num; uva -= PGSIZE){
+      pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
 
+      if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
+        continue;
 
-int getpgtable(struct pt_entry *entries, int num, int wsetOnly) { // Check if entries is null
-  if (entries == 0){
-    return -1;
-  }
-  // Checks that wsetOnly is either 0 or 1
-  if(wsetOnly != 0 && wsetOnly != 1){
-    return -1;
-  }
-  pte_t *pte;
-  struct proc *currProc = myproc();
-  char *currAddr = (char*)PGROUNDDOWN((uint)(currProc->sz));
-  int totalPages = currProc->sz / PGSIZE;
-  int pagesSearched = 0;
-	int numFilled = 0;
-  // only fill upto num pages, if there are less valid pages than num, exit after we've searched all pages
-	while (numFilled < num && pagesSearched < totalPages) {
-    pte = walkpgdir(currProc->pgdir, currAddr, 0);
-		if (wsetOnly == 0) {
-			if ((*pte & PTE_E) != 0 || (*pte & PTE_P) != 0) {
-				entries[numFilled].pdx = PDX(currAddr);
-        entries[numFilled].ptx = PTX(currAddr);
-        entries[numFilled].ppage = *pte >> PTXSHIFT;
-        entries[numFilled].present = (*pte & PTE_P) ? 1 : 0;
-        entries[numFilled].writable = (*pte & PTE_W) ? 1 : 0;
-        entries[numFilled].user = (*pte & PTE_U) ? 1 : 0;
-        entries[numFilled].encrypted = (*pte & PTE_E) ? 1 : 0;
-        entries[numFilled].ref = (*pte & PTE_A) ? 1 : 0;
-        numFilled++;
-			}
-		} else {
-			if (((*pte & PTE_E) == 0) && ((*pte & PTE_P) != 0)) {
-				entries[numFilled].pdx = PDX(currAddr);
-        entries[numFilled].ptx = PTX(currAddr);
-        entries[numFilled].ppage = *pte >> PTXSHIFT;
-        entries[numFilled].present = (*pte & PTE_P) ? 1 : 0;
-        entries[numFilled].writable = (*pte & PTE_W) ? 1 : 0;
-        entries[numFilled].user = (*pte & PTE_U) ? 1 : 0;
-        entries[numFilled].encrypted = (*pte & PTE_E) ? 1 : 0;
-        entries[numFilled].ref = (*pte & PTE_A) ? 1 : 0;
-        numFilled++;
-			}
-		}
-    pagesSearched++;
-    currAddr -= PGSIZE;
-  }
-	return numFilled;
+      if (wsetOnly && !in_queue(curproc, pte)){
+        filled = i + 1;
+        continue;
+      }
+      
+      pt_entries[i].pdx = PDX(uva);
+      pt_entries[i].ptx = PTX(uva);
+      pt_entries[i].ppage = *pte >> PTXSHIFT;
+      pt_entries[i].present = *pte & PTE_P;
+      pt_entries[i].writable = (*pte & PTE_W) > 0;
+      pt_entries[i].encrypted = (*pte & PTE_E) > 0;
+      pt_entries[i].ref = (*pte & PTE_A) > 0;
+      //PT_A flag needs to be modified as per clock algo.
+      i++;
+    }
+
+    if (i + filled < num)
+      return i + filled;
+    else
+      return i;
 }
-
-
-
-
-
-
-
-
-
  
 int dump_rawphymem(char *physical_addr, char * buffer) {
  *buffer = *buffer;
@@ -701,12 +638,6 @@ int dump_rawphymem(char *physical_addr, char * buffer) {
    return -1;
  return 0;
 }
-
-
-
-
-
- 
  
 //PAGEBREAK!
 // Blank page.
